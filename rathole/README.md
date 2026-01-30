@@ -129,22 +129,21 @@ RUST_LOG=debug ./rathole -s sw-v4-server.toml
 Create a systemd service file:
 
 ```bash
-sudo nano /etc/systemd/system/rathole-server-v4.service
+sudo nano /etc/systemd/system/sw-server-v4.service
 ```
 
 Add the following content (adjust paths as needed):
 
 ```ini
 [Unit]
-Description=Rathole VPN Tunnel Server (IPv4)
+Description=Rathole VPN Tunnel Server (SW IPv4)
 After=network.target
 
 [Service]
 Type=simple
-User=your_username
-WorkingDirectory=/<PATH>/orc-cli/rathole
-Environment="RUST_LOG=info"
-ExecStart=/<PATH>/orc-cli/rathole/rathole -s /<PATH>/orc-cli/rathole/sw-v4-server.toml
+User=root
+WorkingDirectory=/root/orc-cli/rathole
+ExecStart=/root/orc-cli/rathole/rathole -s /root/orc-cli/rathole/sw-v4-server.toml
 Restart=always
 RestartSec=10
 StandardOutput=journal
