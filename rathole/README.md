@@ -113,8 +113,8 @@ After=network.target
 [Service]
 Type=simple
 User=your_username
-WorkingDirectory=/home/premier213/projects/vpn-cli/rathole
-ExecStart=/home/premier213/projects/vpn-cli/rathole/rathole -s /home/premier213/projects/vpn-cli/rathole/sw-v4-server.toml
+WorkingDirectory=/<PATH>/orc-cli/rathole
+ExecStart=/<PATH>/orc-cli/rathole/rathole -s /<PATH>/orc-cli/rathole/sw-v4-server.toml
 Restart=always
 RestartSec=10
 StandardOutput=journal
@@ -142,8 +142,8 @@ After=network.target
 [Service]
 Type=simple
 User=your_username
-WorkingDirectory=/home/premier213/projects/vpn-cli/rathole
-ExecStart=/home/premier213/projects/vpn-cli/rathole/rathole -c /home/premier213/projects/vpn-cli/rathole/v4-client.toml
+WorkingDirectory=/<PATH>/orc-cli/rathole
+ExecStart=/<PATH>/orc-cli/rathole/rathole -c /<PATH>/orc-cli/rathole/v4-client.toml
 Restart=always
 RestartSec=10
 StandardOutput=journal
