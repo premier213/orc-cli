@@ -4,8 +4,8 @@ default_token = "change_this_token"
 
 [server.services.SW1]
 type = "tcp"
-local_addr = "[::]:10006"
+bind_addr = "[::]:10006"
 
 [server.services.SW2]
 type = "tcp"
-local_addr = "[::]:20006"
+bind_addr = "[::]:20006"
