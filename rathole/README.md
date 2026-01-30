@@ -55,6 +55,35 @@ On your local machine, run:
 ./rathole -c v6-client.toml
 ```
 
+### Debugging and Logging
+
+Rathole uses Rust's logging system. You can control log verbosity using the `RUST_LOG` environment variable.
+
+**Log Levels** (from least to most verbose):
+- `error` - Only error messages
+- `warn` - Warnings and errors
+- `info` - Informational messages, warnings, and errors
+- `debug` - Debug information, info, warnings, and errors
+- `trace` - Very verbose trace information (all logs)
+
+**Examples:**
+
+```bash
+# Run with error-level logging only
+RUST_LOG=error ./rathole -s sw-v4-server.toml
+
+# Run with debug-level logging
+RUST_LOG=debug ./rathole -c v4-client.toml
+
+# Run with trace-level logging (most verbose)
+RUST_LOG=trace ./rathole -s sw-v4-server.toml
+
+# Set log level for specific modules
+RUST_LOG=rathole=debug,info ./rathole -s sw-v4-server.toml
+```
+
+**Default behavior**: If `RUST_LOG` is not set, rathole will use its default logging level (typically `info`).
+
 ## Running in Background
 
 ### Method 1: Using screen
@@ -67,8 +96,8 @@ On your local machine, run:
 # Start a new screen session
 screen -S rathole-server
 
-# Run rathole
-./rathole -s sw-v4-server.toml
+# Run rathole (with optional debug logging)
+RUST_LOG=debug ./rathole -s sw-v4-server.toml
 
 # Detach: Press Ctrl+A, then D
 # Reattach: screen -r rathole-server
@@ -85,8 +114,8 @@ screen -S rathole-server
 # Start a new tmux session
 tmux new -s rathole-server
 
-# Run rathole
-./rathole -s sw-v4-server.toml
+# Run rathole (with optional debug logging)
+RUST_LOG=debug ./rathole -s sw-v4-server.toml
 
 # Detach: Press Ctrl+B, then D
 # Reattach: tmux attach -t rathole-server
@@ -114,6 +143,7 @@ After=network.target
 Type=simple
 User=your_username
 WorkingDirectory=/<PATH>/orc-cli/rathole
+Environment="RUST_LOG=info"
 ExecStart=/<PATH>/orc-cli/rathole/rathole -s /<PATH>/orc-cli/rathole/sw-v4-server.toml
 Restart=always
 RestartSec=10
@@ -123,6 +153,8 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Note**: To enable debug logging in systemd, change `Environment="RUST_LOG=info"` to `Environment="RUST_LOG=debug"` or `Environment="RUST_LOG=trace"` for more verbose output.
 
 For IPv6 server, create `rathole-server-v6.service` with the same content but change:
 - Description to "Rathole VPN Tunnel Server (IPv6)"
@@ -143,6 +175,7 @@ After=network.target
 Type=simple
 User=your_username
 WorkingDirectory=/<PATH>/orc-cli/rathole
+Environment="RUST_LOG=info"
 ExecStart=/<PATH>/orc-cli/rathole/rathole -c /<PATH>/orc-cli/rathole/v4-client.toml
 Restart=always
 RestartSec=10
@@ -152,6 +185,8 @@ StandardError=journal
 [Install]
 WantedBy=multi-user.target
 ```
+
+**Note**: To enable debug logging in systemd, change `Environment="RUST_LOG=info"` to `Environment="RUST_LOG=debug"` or `Environment="RUST_LOG=trace"` for more verbose output.
 
 ### Enable and Start Services
 
@@ -184,8 +219,8 @@ sudo journalctl -u rathole-client-v4.service -f
 # Find and kill the process
 pkill -f rathole
 
-# Start again
-nohup ./rathole -s sw-v4-server.toml > rathole-server-v4.log 2>&1 &
+# Start again (with optional debug logging)
+nohup env RUST_LOG=debug ./rathole -s sw-v4-server.toml > rathole-server-v4.log 2>&1 &
 ```
 
 ### If Running with systemd
@@ -269,6 +304,10 @@ tail -f rathole-server-v4.log
 
 # If using systemd
 sudo journalctl -u rathole-server-v4.service -f
+
+# View logs with filtering (if using debug/trace logging)
+sudo journalctl -u rathole-server-v4.service -f | grep -i error
+sudo journalctl -u rathole-server-v4.service -f | grep -i debug
 ```
 
 ### Verify configuration
@@ -276,6 +315,9 @@ sudo journalctl -u rathole-server-v4.service -f
 ```bash
 # Test configuration syntax
 ./rathole -s sw-v4-server.toml --check-config
+
+# Test with debug logging to see detailed configuration loading
+RUST_LOG=debug ./rathole -s sw-v4-server.toml --check-config
 ```
 
 ### Common Issues
@@ -297,6 +339,38 @@ sudo journalctl -u rathole-server-v4.service -f
    ```
 
 4. **Token mismatch**: Ensure client and server use the same token
+
+### Debugging with RUST_LOG
+
+When troubleshooting issues, enable debug logging to get more detailed information:
+
+```bash
+# Enable debug logging for detailed diagnostics
+RUST_LOG=debug ./rathole -s sw-v4-server.toml
+
+# Enable trace logging for maximum verbosity (very detailed)
+RUST_LOG=trace ./rathole -c v4-client.toml
+
+# Set error-level only to reduce noise
+RUST_LOG=error ./rathole -s sw-v4-server.toml
+```
+
+**Log level recommendations:**
+- **Production**: `RUST_LOG=error` or `RUST_LOG=warn` (minimal logging)
+- **Normal operation**: `RUST_LOG=info` (default, balanced)
+- **Troubleshooting**: `RUST_LOG=debug` (detailed diagnostics)
+- **Deep debugging**: `RUST_LOG=trace` (very verbose, all logs)
+
+**For systemd services**, edit the service file and modify the `Environment` line:
+```ini
+Environment="RUST_LOG=debug"  # Change from info to debug/trace
+```
+
+Then reload and restart:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart rathole-server-v4.service
+```
 
 ## Notes
 
