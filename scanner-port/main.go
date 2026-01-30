@@ -43,11 +43,12 @@ func tcping(ip string, port int, timeout time.Duration) ScanResult {
 	return result
 }
 
-func scanPorts(ip string, ports []int, timeout time.Duration, verbose bool) {
+func scanPorts(ip string, ports []int, timeout time.Duration, verbose bool, resultFile *os.File, headerWritten *bool) []int {
 	fmt.Printf("Scanning %s...\n\n", ip)
 
 	var successCount, failedCount int
 	var totalDuration time.Duration
+	var openPorts []int
 
 	for _, port := range ports {
 		result := tcping(ip, port, timeout)
@@ -55,8 +56,30 @@ func scanPorts(ip string, ports []int, timeout time.Duration, verbose bool) {
 		if result.Status == "SUCCESS" {
 			successCount++
 			totalDuration += result.Duration
+			openPorts = append(openPorts, port)
 			fmt.Printf("Probing %s:%d/tcp - Port is open - time=%s\n",
 				result.IP, result.Port, formatDuration(result.Duration))
+
+			// Immediately append to file if file handle is provided
+			if resultFile != nil {
+				// Write header only once
+				if !*headerWritten {
+					_, err := resultFile.WriteString(fmt.Sprintf("# Open ports for %s\n", ip))
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "Warning: Failed to write header to file: %v\n", err)
+					} else {
+						*headerWritten = true
+					}
+				}
+				// Append the port immediately
+				_, err := resultFile.WriteString(fmt.Sprintf("%d\n", port))
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "Warning: Failed to write port to file: %v\n", err)
+				} else {
+					// Flush immediately to ensure data is written
+					resultFile.Sync()
+				}
+			}
 		} else {
 			failedCount++
 			if verbose {
@@ -78,6 +101,8 @@ func scanPorts(ip string, ports []int, timeout time.Duration, verbose bool) {
 		avgDuration := totalDuration / time.Duration(successCount)
 		fmt.Printf("Average response time: %s\n", formatDuration(avgDuration))
 	}
+
+	return openPorts
 }
 
 func formatDuration(d time.Duration) string {
@@ -93,12 +118,22 @@ func formatDuration(d time.Duration) string {
 func parsePorts(portStr string) ([]int, error) {
 	var ports []int
 
+	// Handle "all" keyword (case-insensitive)
+	portStr = strings.TrimSpace(portStr)
+	if strings.ToLower(portStr) == "all" {
+		// Return all ports from 1 to 65535
+		for p := 1; p <= 65535; p++ {
+			ports = append(ports, p)
+		}
+		return ports, nil
+	}
+
 	// Handle comma-separated or space-separated ports
 	portStr = strings.ReplaceAll(portStr, ",", " ")
 	parts := strings.Fields(portStr)
 
 	for _, part := range parts {
-		// Handle port ranges (e.g., 8080-8090)
+		// Handle port ranges (e.g., 8080-8090 or 1-65535)
 		if strings.Contains(part, "-") {
 			rangeParts := strings.Split(part, "-")
 			if len(rangeParts) != 2 {
@@ -181,11 +216,15 @@ func main() {
 	)
 
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "Usage: %s [options] <IP> <port1> [port2] [port3] ...\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s [options] <IP> [port1] [port2] [port3] ...\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "If no ports are specified, all ports (1-65535) will be scanned by default.\n\n")
 		fmt.Fprintf(os.Stderr, "Examples:\n")
+		fmt.Fprintf(os.Stderr, "  %s 1.1.1.1\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s 1.1.1.1 all\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s 1.1.1.1 8081\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s 1.1.1.1 8081 8082 8083\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s 1.1.1.1 8080-8090\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  %s 1.1.1.1 1-1000\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s 1.1.1.1 8081,8082,8083\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -f port.txt 1.1.1.1\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "  %s -f port.txt 1.1.1.1 8081 8082\n", os.Args[0])
@@ -216,9 +255,28 @@ func main() {
 
 	// Collect ports from file and/or command-line arguments
 	var allPorts []int
+	var isRangeOrAll bool // Track if range or "all" was selected
+	var originalPortStr string
 
 	// Read ports from file if specified
 	if *portFile != "" {
+		// Check if file contains range or "all" before parsing
+		file, err := os.Open(*portFile)
+		if err == nil {
+			scanner := bufio.NewScanner(file)
+			for scanner.Scan() {
+				line := strings.TrimSpace(scanner.Text())
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+				if strings.ToLower(line) == "all" || strings.Contains(line, "-") {
+					isRangeOrAll = true
+					break
+				}
+			}
+			file.Close()
+		}
+
 		filePorts, err := readPortsFromFile(*portFile)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error reading ports from file: %v\n", err)
@@ -234,13 +292,27 @@ func main() {
 			portStrs = append(portStrs, flag.Arg(i))
 		}
 
-		portStr := strings.Join(portStrs, " ")
-		cmdPorts, err := parsePorts(portStr)
+		originalPortStr = strings.Join(portStrs, " ")
+		cmdPorts, err := parsePorts(originalPortStr)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing ports: %v\n", err)
 			os.Exit(1)
 		}
 		allPorts = append(allPorts, cmdPorts...)
+
+		// Check if command-line contains range or "all"
+		originalPortStrLower := strings.ToLower(strings.TrimSpace(originalPortStr))
+		if originalPortStrLower == "all" || strings.Contains(originalPortStr, "-") {
+			isRangeOrAll = true
+		}
+	}
+
+	// If no ports specified, default to all ports (1-65535)
+	if len(allPorts) == 0 {
+		for p := 1; p <= 65535; p++ {
+			allPorts = append(allPorts, p)
+		}
+		isRangeOrAll = true // Default is "all"
 	}
 
 	// Remove duplicates
@@ -258,5 +330,43 @@ func main() {
 		os.Exit(1)
 	}
 
-	scanPorts(ip, ports, *timeout, *verbose)
+	// Open result.txt in append mode if range or "all" was selected
+	var resultFile *os.File
+	var err error
+	var headerWritten bool
+	if isRangeOrAll {
+		// Check if file exists and is empty
+		fileInfo, statErr := os.Stat("result.txt")
+		isNewFile := statErr != nil || fileInfo.Size() == 0
+
+		resultFile, err = os.OpenFile("result.txt", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to open result.txt: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Results will not be saved to file\n")
+			resultFile = nil
+		} else {
+			headerWritten = !isNewFile
+			fmt.Printf("[Notice] Open ports will be appended to result.txt as they are found\n\n")
+		}
+		defer func() {
+			if resultFile != nil {
+				resultFile.Close()
+			}
+		}()
+	}
+
+	openPorts := scanPorts(ip, ports, *timeout, *verbose, resultFile, &headerWritten)
+
+	// Summary message
+	if isRangeOrAll {
+		if len(openPorts) > 0 {
+			fmt.Printf("\n%d open port(s) saved to result.txt\n", len(openPorts))
+		} else {
+			fmt.Printf("\nNo open ports found.\n")
+		}
+	} else {
+		if len(openPorts) > 0 {
+			fmt.Printf("\n[Notice] Results not saved to file (only saved for range or 'all' scans)\n")
+		}
+	}
 }
