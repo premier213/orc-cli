@@ -1,0 +1,9 @@
+[client]
+remote_addr = "myserver.com:6003"
+default_token = "change_this_token"
+
+[client.services.SW1]
+local_addr = "127.0.0.1:10006"
+
+[client.services.SW2]
+local_addr = "127.0.0.1:20006"
