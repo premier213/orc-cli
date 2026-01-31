@@ -117,7 +117,28 @@ install_jq() {
 # Install jq
 install_jq
 
-config_dir="$(cd "$(dirname "$0")" && pwd)"
+# Function to install jq if not already installed
+install_make() {
+    if ! command -v jq &> /dev/null; then
+        # Check if the system is using apt package manager
+        if command -v apt-get &> /dev/null; then
+            echo -e "${RED}jq is not installed. Installing...${NC}"
+            sleep 1
+            sudo apt-get update
+            sudo apt-get install -y make
+        else
+            echo -e "${RED}Error: Unsupported package manager. Please install make manually.${NC}\n"
+            press_key
+            exit 1
+        fi
+    fi
+}
+
+# Install make
+install_make
+
+
+config_dir="$HOME/rathole-core"
 # Function to download and extract Rathole Core
 download_and_extract_rathole() {
     # check if core installed already

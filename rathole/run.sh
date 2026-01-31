@@ -98,7 +98,7 @@ install_jq() {
 # Install jq
 install_jq
 
-config_dir="$(cd "$(dirname "$0")" && pwd)"
+config_dir="$HOME/rathole-core"
 
 # Fetch server country
 SERVER_COUNTRY=$(curl --max-time 3 -sS "http://ipwhois.app/json/$SERVER_IP" | jq -r '.country')
