@@ -33,9 +33,10 @@ rathole-run: ## Run rathole
 	fi
 	@bash rathole/run.sh
 
-scanner-build: ## Build the port scanner binary
+scanner-build: ## Build port scanner (native + Windows)
 	@cd scanner-port && go build -o scanner-port main.go
-	@echo "Scanner built successfully: scanner-port/scanner-port"
+	@cd scanner-port && GOOS=windows GOARCH=amd64 go build -o scanner-port.exe main.go
+	@echo "Scanner built: scanner-port/scanner-port (native), scanner-port/scanner-port.exe (Windows)"
 
 scanner-port: ## Run port scanner (make scanner-port <IP> [ports])
 	@ARGS="$(filter-out $@,$(MAKECMDGOALS))"; \
